@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Transaction } from './transaction.entity';
 import { AccountService } from '../account/account.service';
 import { DepositDto } from './dto/deposit.dto';
@@ -7,27 +9,26 @@ import { TransferDto } from './dto/transfer.dto';
 
 @Injectable()
 export class TransactionService {
-  private transactions: Transaction[] = [];
-
-  constructor(private accountService: AccountService) {}
+  constructor(
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
+    private accountService: AccountService,
+  ) {}
 
   async deposit(userId: string, depositDto: DepositDto): Promise<Transaction> {
     const account = await this.accountService.findOne(depositDto.accountId, userId);
     
-    const transaction: Transaction = {
-      id: Date.now().toString(),
+    const transaction = this.transactionRepository.create({
       type: 'deposit',
       amount: depositDto.amount,
       accountId: depositDto.accountId,
       userId,
       description: depositDto.description || 'Deposit',
       status: 'completed',
-      createdAt: new Date(),
-    };
+    });
 
     await this.accountService.updateBalance(depositDto.accountId, depositDto.amount);
-    this.transactions.push(transaction);
-    return transaction;
+    return this.transactionRepository.save(transaction);
   }
 
   async withdraw(userId: string, withdrawDto: WithdrawDto): Promise<Transaction> {
@@ -37,20 +38,17 @@ export class TransactionService {
       throw new BadRequestException('Insufficient balance');
     }
 
-    const transaction: Transaction = {
-      id: Date.now().toString(),
+    const transaction = this.transactionRepository.create({
       type: 'withdrawal',
       amount: withdrawDto.amount,
       accountId: withdrawDto.accountId,
       userId,
       description: withdrawDto.description || 'Withdrawal',
       status: 'completed',
-      createdAt: new Date(),
-    };
+    });
 
     await this.accountService.updateBalance(withdrawDto.accountId, -withdrawDto.amount);
-    this.transactions.push(transaction);
-    return transaction;
+    return this.transactionRepository.save(transaction);
   }
 
   async transfer(userId: string, transferDto: TransferDto): Promise<Transaction> {
@@ -61,8 +59,7 @@ export class TransactionService {
       throw new BadRequestException('Insufficient balance');
     }
 
-    const transaction: Transaction = {
-      id: Date.now().toString(),
+    const transaction = this.transactionRepository.create({
       type: 'transfer',
       amount: transferDto.amount,
       fromAccountId: transferDto.fromAccountId,
@@ -70,24 +67,27 @@ export class TransactionService {
       userId,
       description: transferDto.description || `Transfer to ${toAccount.accountName}`,
       status: 'completed',
-      createdAt: new Date(),
-    };
+    });
 
     await this.accountService.updateBalance(transferDto.fromAccountId, -transferDto.amount);
     await this.accountService.updateBalance(transferDto.toAccountId, transferDto.amount);
-    this.transactions.push(transaction);
-    return transaction;
+    return this.transactionRepository.save(transaction);
   }
 
   async findAll(userId: string, isAdmin: boolean = false): Promise<Transaction[]> {
     if (isAdmin) {
-      return this.transactions;
+      return this.transactionRepository.find({
+        order: { createdAt: 'DESC' },
+      });
     }
-    return this.transactions.filter(transaction => transaction.userId === userId);
+    return this.transactionRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async findOne(id: string, userId: string, isAdmin: boolean = false): Promise<Transaction> {
-    const transaction = this.transactions.find(t => t.id === id);
+    const transaction = await this.transactionRepository.findOne({ where: { id } });
     if (!transaction) {
       throw new NotFoundException('Transaction not found');
     }

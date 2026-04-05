@@ -1,17 +1,35 @@
 import { plainToClass } from 'class-transformer';
-import { IsString, IsOptional, validateSync } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, validateSync } from 'class-validator';
 
 export class EnvironmentVariables {
   @IsString()
-  JWT_SECRET: string;
+  JWT_SECRET!: string;
 
   @IsString()
   @IsOptional()
-  JWT_EXPIRATION: string;
+  JWT_EXPIRATION!: string;
+
+  @IsNumber()
+  @IsOptional()
+  PORT!: number;
 
   @IsString()
-  @IsOptional()
-  PORT: string;
+  DB_HOST!: string;
+
+  @IsNumber()
+  DB_PORT!: number;
+
+  @IsString()
+  DB_USERNAME!: string;
+
+  @IsString()
+  DB_PASSWORD!: string;
+
+  @IsString()
+  DB_DATABASE!: string;
+
+  @IsBoolean()
+  DB_SYNCHRONIZE!: boolean;
 }
 
 export function validate(config: Record<string, unknown>) {

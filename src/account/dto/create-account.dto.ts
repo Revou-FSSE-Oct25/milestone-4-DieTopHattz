@@ -2,10 +2,10 @@ import { IsString, IsOptional, IsNumber, Min, IsIn } from 'class-validator';
 
 export class CreateAccountDto {
   @IsString()
-  accountName: string;
+  accountName!: string;
 
   @IsString()
-  bankName: string;
+  bankName!: string;
 
   @IsOptional()
   @IsNumber()

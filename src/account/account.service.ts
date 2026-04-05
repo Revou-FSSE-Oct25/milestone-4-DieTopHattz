@@ -1,37 +1,39 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Account } from './account.entity';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 
 @Injectable()
 export class AccountService {
-  private accounts: Account[] = [];
+  constructor(
+    @InjectRepository(Account)
+    private accountRepository: Repository<Account>,
+  ) {}
 
   async create(userId: string, createAccountDto: CreateAccountDto): Promise<Account> {
-    const account: Account = {
-      id: Date.now().toString(),
+    const account = this.accountRepository.create({
       userId,
       accountNumber: this.generateAccountNumber(),
       accountName: createAccountDto.accountName,
       bankName: createAccountDto.bankName,
       balance: createAccountDto.initialBalance || 0,
       currency: createAccountDto.currency || 'IDR',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.accounts.push(account);
-    return account;
+    });
+    
+    return this.accountRepository.save(account);
   }
 
   async findAll(userId: string, isAdmin: boolean = false): Promise<Account[]> {
     if (isAdmin) {
-      return this.accounts;
+      return this.accountRepository.find();
     }
-    return this.accounts.filter(account => account.userId === userId);
+    return this.accountRepository.find({ where: { userId } });
   }
 
   async findOne(id: string, userId: string, isAdmin: boolean = false): Promise<Account> {
-    const account = this.accounts.find(acc => acc.id === id);
+    const account = await this.accountRepository.findOne({ where: { id } });
     if (!account) {
       throw new NotFoundException('Account not found');
     }
@@ -43,14 +45,9 @@ export class AccountService {
 
   async update(id: string, userId: string, updateAccountDto: UpdateAccountDto, isAdmin: boolean = false): Promise<Account> {
     const account = await this.findOne(id, userId, isAdmin);
-    const updatedAccount = {
-      ...account,
-      ...updateAccountDto,
-      updatedAt: new Date(),
-    };
-    const index = this.accounts.findIndex(acc => acc.id === id);
-    this.accounts[index] = updatedAccount;
-    return updatedAccount;
+    Object.assign(account, updateAccountDto);
+    account.updatedAt = new Date();
+    return this.accountRepository.save(account);
   }
 
   async delete(id: string, userId: string, isAdmin: boolean = false): Promise<void> {
@@ -58,22 +55,23 @@ export class AccountService {
     if (account.balance > 0) {
       throw new BadRequestException('Cannot delete account with positive balance');
     }
-    const index = this.accounts.findIndex(acc => acc.id === id);
-    this.accounts.splice(index, 1);
+    await this.accountRepository.delete(id);
   }
 
   async updateBalance(id: string, amount: number): Promise<Account> {
-    const account = this.accounts.find(acc => acc.id === id);
+    const account = await this.accountRepository.findOne({ where: { id } });
     if (!account) {
       throw new NotFoundException('Account not found');
     }
-    const newBalance = account.balance + amount;
+    
+    const newBalance = Number(account.balance) + amount;
     if (newBalance < 0) {
       throw new BadRequestException('Insufficient balance');
     }
+    
     account.balance = newBalance;
     account.updatedAt = new Date();
-    return account;
+    return this.accountRepository.save(account);
   }
 
   private generateAccountNumber(): string {
