@@ -1,0 +1,74 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  password            String
+  name                String
+  role                Role      @default(user)
+  refreshToken        String?   @map("refresh_token")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  accounts            Account[]
+  transactions        Transaction[]
+  
+  @@map("users")
+}
+
+model Account {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  accountNumber String    @unique @map("account_number")
+  accountName   String    @map("account_name")
+  bankName      String    @map("bank_name")
+  balance       Float     @default(0)
+  currency      String    @default("IDR")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+  sentFrom      Transaction[] @relation("FromAccount")
+  sentTo        Transaction[] @relation("ToAccount")
+  
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  type          String
+  amount        Float
+  fromAccountId String?   @map("from_account_id")
+  toAccountId   String?   @map("to_account_id")
+  accountId     String?   @map("account_id")
+  userId        String    @map("user_id")
+  description   String
+  status        String    @default("completed")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  user          User      @relation(fields: [userId], references: [id])
+  account       Account?  @relation(fields: [accountId], references: [id])
+  fromAccount   Account?  @relation("FromAccount", fields: [fromAccountId], references: [id])
+  toAccount     Account?  @relation("ToAccount", fields: [toAccountId], references: [id])
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+enum Role {
+  user
+  admin
+}

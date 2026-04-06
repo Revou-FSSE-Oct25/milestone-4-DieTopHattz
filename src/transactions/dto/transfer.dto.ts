@@ -2,14 +2,14 @@ import { IsString, IsNumber, Min, IsOptional } from 'class-validator';
 
 export class TransferDto {
   @IsString()
-  fromAccountId: string;
+  fromAccountId!: string;
 
   @IsString()
-  toAccountId: string;
+  toAccountId!: string;
 
   @IsNumber()
   @Min(0.01)
-  amount: number;
+  amount!: number;
 
   @IsOptional()
   @IsString()

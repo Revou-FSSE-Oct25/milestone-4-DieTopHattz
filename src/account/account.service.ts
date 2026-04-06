@@ -1,65 +1,97 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Account } from './account.entity';
+import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 
 @Injectable()
 export class AccountService {
-  constructor(
-    @InjectRepository(Account)
-    private accountRepository: Repository<Account>,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  async create(userId: string, createAccountDto: CreateAccountDto): Promise<Account> {
-    const account = this.accountRepository.create({
-      userId,
-      accountNumber: this.generateAccountNumber(),
-      accountName: createAccountDto.accountName,
-      bankName: createAccountDto.bankName,
-      balance: createAccountDto.initialBalance || 0,
-      currency: createAccountDto.currency || 'IDR',
+  async create(userId: string, createAccountDto: CreateAccountDto) {
+    return this.prisma.account.create({
+      data: {
+        userId,
+        accountNumber: this.generateAccountNumber(),
+        accountName: createAccountDto.accountName,
+        bankName: createAccountDto.bankName,
+        balance: createAccountDto.initialBalance || 0,
+        currency: createAccountDto.currency || 'IDR',
+      },
+    });
+  }
+
+  async findAll(userId: string, isAdmin: boolean = false) {
+    if (isAdmin) {
+      return this.prisma.account.findMany({
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    
+    return this.prisma.account.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOne(id: string, userId: string, isAdmin: boolean = false) {
+    const account = await this.prisma.account.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
     });
     
-    return this.accountRepository.save(account);
-  }
-
-  async findAll(userId: string, isAdmin: boolean = false): Promise<Account[]> {
-    if (isAdmin) {
-      return this.accountRepository.find();
-    }
-    return this.accountRepository.find({ where: { userId } });
-  }
-
-  async findOne(id: string, userId: string, isAdmin: boolean = false): Promise<Account> {
-    const account = await this.accountRepository.findOne({ where: { id } });
     if (!account) {
       throw new NotFoundException('Account not found');
     }
+    
     if (!isAdmin && account.userId !== userId) {
       throw new ForbiddenException('You can only access your own accounts');
     }
+    
     return account;
   }
 
-  async update(id: string, userId: string, updateAccountDto: UpdateAccountDto, isAdmin: boolean = false): Promise<Account> {
-    const account = await this.findOne(id, userId, isAdmin);
-    Object.assign(account, updateAccountDto);
-    account.updatedAt = new Date();
-    return this.accountRepository.save(account);
+  async update(id: string, userId: string, updateAccountDto: UpdateAccountDto, isAdmin: boolean = false) {
+    await this.findOne(id, userId, isAdmin);
+    
+    return this.prisma.account.update({
+      where: { id },
+      data: {
+        ...updateAccountDto,
+        updatedAt: new Date(),
+      },
+    });
   }
 
-  async delete(id: string, userId: string, isAdmin: boolean = false): Promise<void> {
+  async delete(id: string, userId: string, isAdmin: boolean = false) {
     const account = await this.findOne(id, userId, isAdmin);
+    
     if (account.balance > 0) {
       throw new BadRequestException('Cannot delete account with positive balance');
     }
-    await this.accountRepository.delete(id);
+    
+    await this.prisma.account.delete({
+      where: { id },
+    });
   }
 
-  async updateBalance(id: string, amount: number): Promise<Account> {
-    const account = await this.accountRepository.findOne({ where: { id } });
+  async updateBalance(id: string, amount: number) {
+    const account = await this.prisma.account.findUnique({
+      where: { id },
+    });
+    
     if (!account) {
       throw new NotFoundException('Account not found');
     }
@@ -69,9 +101,13 @@ export class AccountService {
       throw new BadRequestException('Insufficient balance');
     }
     
-    account.balance = newBalance;
-    account.updatedAt = new Date();
-    return this.accountRepository.save(account);
+    return this.prisma.account.update({
+      where: { id },
+      data: {
+        balance: newBalance,
+        updatedAt: new Date(),
+      },
+    });
   }
 
   private generateAccountNumber(): string {
