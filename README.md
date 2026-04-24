@@ -77,6 +77,8 @@ After seeding the database, you can use these test accounts:
 | GET | `/api/admin/transactions` | Get all transactions |
 | GET | `/api/admin/dashboard` | System statistics |
 
+Backend Deployment URL: https://railway.com/project/f7370192-7a38-4103-b95f-203dc746fecc/service/7191ef2b-9dc1-4de5-a1a1-9cdd91fedb98?environmentId=175dc850-d489-40e0-9ff7-bfcf3dd77bd6/
+
 ## Project Setup
 
 ```bash
